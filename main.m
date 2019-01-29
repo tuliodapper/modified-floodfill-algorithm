@@ -1,0 +1,189 @@
+% Clear the command window
+clc
+
+%Size
+size = 12;
+
+% Create a new maze
+%maze = generate_maze(size,size);
+maze = load_maze('current_maze.maze');
+% Save map
+%save_maze('current_maze.maze',maze);
+    
+% Start position
+start_position_x = 1;
+start_position_y = 1;
+
+% Mode of operation
+% 1 -> Searching quickest path
+% 2 -> Going to the starting position
+% 3 -> Going throght the quickest path without searching
+% 4 -> Completed!
+
+mode_operation = 1;
+
+% Array contains all the number of cells needed to get to the center on each position.
+maze_array = ones(size,size)*size*size;
+
+maze_walls = zeros(size*2,size*2);
+maze_checked = zeros(size,size);
+
+% Variable initialisation
+current_x = start_position_x;
+current_y = start_position_y;
+
+for i = 1:size
+    [A1 A2] = maze_walls_from_xy(1, i, 1);
+    maze_walls(A1,A2) = 1;
+end
+
+for i = 1:size
+    [A1 A2] = maze_walls_from_xy(2, size, i);
+    maze_walls(A1,A2) = 1;
+end
+
+for i = 1:size
+    [A1 A2] = maze_walls_from_xy(3, i, size);
+    maze_walls(A1,A2) = 1;
+end
+
+for i = 1:size
+    [A1 A2] = maze_walls_from_xy(4, 1, i);
+    maze_walls(A1,A2) = 1;
+end
+    
+% To stop execution of a MATLAB® command, press Ctrl+C or Ctrl+Break.
+% On Apple Macintosh platforms, you also can use Command+. (the Command key and the period key).
+while(1)
+    
+%% Plot maze
+    draw_maze(maze,1,current_x,current_y,maze_array,maze_walls);
+    
+    maze_checked(current_x,current_y) = 1;
+    
+    if ((mode_operation == 1) && (maze_array(current_x,current_y) == 0))
+        mode_operation = 2;
+    elseif ((mode_operation == 2) && (maze_array(current_x,current_y) == 0))
+        mode_operation = 3;
+    elseif ((mode_operation == 3) && (maze_array(current_x,current_y) == 0))
+        mode_operation = 4;
+    end
+    
+    if ((mode_operation == 1) || (mode_operation == 2)  || (mode_operation == 3))
+        %% Update the wall map
+            for direction = 1:4
+                if(is_move_valid(maze, maze_index_from_XY(maze, current_x, current_y), direction) < 0)
+                    [A1 A2] = maze_walls_from_xy(direction, current_x, current_y);
+                    maze_walls(A1,A2) = 1;
+                    [B1 B2] = maze_newxy_from_xy(direction, current_x, current_y);
+                    if (B1>=1) && (B1<=size) && (B2>=1) && (B2<=size)
+                        [A1 A2] = maze_walls_from_xy(invert_direction(direction), B1, B2);
+                        maze_walls(A1,A2) = 1;
+                    end
+                end
+            end
+
+        %% Update distance values
+
+            maze_array = ones(size,size)*size*size;
+
+            level = 0;
+
+            stack = zeros(size*size, 2); % Make sure the stack is empty
+            stack_position = 0;
+
+            stack_open_neighbor = zeros(size*size,2);
+            stack_open_neighbor_position = 0;
+            
+            if ((mode_operation == 1) || (mode_operation == 3))
+                for i = (size/2):((size/2)+1)
+                    for j = (size/2):((size/2)+1)
+                        stack_position = stack_position + 1;
+                        stack(stack_position,1) = i;
+                        stack(stack_position,2) = j;
+                    end
+                end
+            end
+            
+            if (mode_operation == 2)
+                stack_position = 1;
+                stack(stack_position,1) = 1;
+                stack(stack_position,2) = 1;
+            end
+
+            while(stack_position > 0)
+                while(stack_position > 0)
+                    auxiliar_x = stack(stack_position, 1);
+                    auxiliar_y = stack(stack_position, 2);  
+                    stack_position = stack_position - 1;
+                    if (maze_array(auxiliar_x, auxiliar_y) == size*size)
+                        maze_array(auxiliar_x, auxiliar_y) = level;
+                        for direction = 1:4
+                            [A1 A2] = maze_walls_from_xy(direction, auxiliar_x, auxiliar_y);
+                            [B1 B2] = maze_newxy_from_xy(direction, auxiliar_x, auxiliar_y);
+                            if ((maze_walls(A1,A2) == 0))
+                                stack_open_neighbor_position = stack_open_neighbor_position + 1;
+                                stack_open_neighbor(stack_open_neighbor_position, 1) = B1;
+                                stack_open_neighbor(stack_open_neighbor_position, 2) = B2;
+                            end
+                        end
+                    end
+                end
+
+                if (stack_open_neighbor_position > 0)
+                    level = level + 1;
+                    stack = stack_open_neighbor;
+                    stack_position = stack_open_neighbor_position;
+                    stack_open_neighbor = zeros(size*size,2);
+                    stack_open_neighbor_position = 0;
+                end
+            end
+
+    end
+
+    if (mode_operation ~= 4)
+        %% Decide which neighboring cell has the lowest distance value
+        stack_open_neighbor_position = 0;
+        stack_open_neighbor = zeros(4,3);
+
+        for direction = 1:4
+            [A1 A2] = maze_walls_from_xy(direction, current_x, current_y);
+            [B1 B2] = maze_newxy_from_xy(direction, current_x, current_y);
+            if ((maze_walls(A1,A2) == 0) && (maze_array(B1, B2)~=-1)) 
+                stack_open_neighbor_position = stack_open_neighbor_position + 1;
+                stack_open_neighbor(stack_open_neighbor_position, 1) = B1;
+                stack_open_neighbor(stack_open_neighbor_position, 2) = B2;
+                stack_open_neighbor(stack_open_neighbor_position, 3) = maze_array(B1, B2);
+            end
+        end
+        
+        if (mode_operation == 2)
+            stack_unchecked = 0;
+            stack_open_neighbor_minor = 1;
+            for k = 1:stack_open_neighbor_position
+                if (maze_checked(stack_open_neighbor(k, 1), stack_open_neighbor(k, 2)) == 0)
+                    stack_unchecked = k;
+                elseif (stack_unchecked == 0) && (stack_open_neighbor(k, 3) < stack_open_neighbor(stack_open_neighbor_minor, 3))
+                    stack_open_neighbor_minor = k;
+                end
+            end
+            if (stack_unchecked > 0)
+                stack_open_neighbor_minor = stack_unchecked;
+            end
+        else
+            stack_open_neighbor_minor = 1;
+            for k = 1:stack_open_neighbor_position
+                if stack_open_neighbor(k, 3) < stack_open_neighbor(stack_open_neighbor_minor, 3)
+                    stack_open_neighbor_minor = k;
+                end
+            end
+        end
+
+        % Update current position
+        current_x  = stack_open_neighbor(stack_open_neighbor_minor, 1);
+        current_y  = stack_open_neighbor(stack_open_neighbor_minor, 2);
+    end
+
+    %pause(0.1);
+
+end
